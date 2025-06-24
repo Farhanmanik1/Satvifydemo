@@ -11,7 +11,10 @@ export default function ClientSessionProvider({ children }: { children: React.Re
         console.error("Error fetching user:", userError);
         return;
       }
-      if (!user) return;
+      if (!user) {
+        console.error("No user found in supabase auth");
+        return;
+      }
       // Check if profile exists
       const { data: profile, error: selectError } = await supabase
         .from("profiles")
