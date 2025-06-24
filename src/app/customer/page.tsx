@@ -54,16 +54,29 @@ const REVIEWS = [
 export default function CustomerHome() {
   useEffect(() => {
     const ensureProfile = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError) {
+        console.error("Error fetching user:", userError);
+        return;
+      }
+      if (!user) {
+        console.warn("No user found, skipping profile ensure.");
+        return;
+      }
       // Check if profile exists
-      const { data: profile } = await supabase
+      const { data: profile, error: selectError } = await supabase
         .from("profiles")
         .select("id")
         .eq("id", user.id)
         .single();
+      if (selectError && selectError.code !== 'PGRST116') {
+        // PGRST116 = No rows found, which is fine
+        console.error("Error selecting profile:", selectError);
+        return;
+      }
       if (!profile) {
-        await supabase.from("profiles").insert([
+        console.log("Attempting to insert profile for user:", user.id, user.email);
+        const { error: insertError } = await supabase.from("profiles").insert([
           {
             id: user.id,
             full_name: user.user_metadata?.full_name || user.email,
@@ -71,6 +84,13 @@ export default function CustomerHome() {
             role: "customer"
           }
         ]);
+        if (insertError) {
+          console.error("Failed to insert profile:", insertError);
+        } else {
+          console.log("Profile inserted successfully!");
+        }
+      } else {
+        console.log("Profile already exists for user:", user.id);
       }
     };
     ensureProfile();
