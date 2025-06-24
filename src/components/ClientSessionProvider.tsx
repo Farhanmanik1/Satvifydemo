@@ -15,6 +15,7 @@ export default function ClientSessionProvider({ children }: { children: React.Re
         console.error("No user found in supabase auth");
         return;
       }
+      console.log("User ID from supabase.auth.getUser():", user.id);
       // Check if profile exists
       const { data: profile, error: selectError } = await supabase
         .from("profiles")
@@ -43,6 +44,7 @@ export default function ClientSessionProvider({ children }: { children: React.Re
         }
       } else {
         console.log("Profile already exists for user:", user.id);
+        console.log("Profile ID:", profile.id);
       }
     };
     ensureProfile();
