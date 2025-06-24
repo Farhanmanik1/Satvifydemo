@@ -17,16 +17,8 @@ export default function ProfilePage() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
 
+  // Get session only once on mount
   useEffect(() => {
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      if (!session) {
-        router.push("/login");
-      }
-    });
-
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (!session) {
@@ -34,11 +26,17 @@ export default function ProfilePage() {
       }
     });
 
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
     return () => subscription.unsubscribe();
   }, [router]);
 
+  // Fetch profile only AFTER session is fully loaded
   useEffect(() => {
-    if (!session?.user) return;
+    if (!session || !session.user) return;
+
     const fetchProfile = async () => {
       setLoading(true);
       setError("");
@@ -47,6 +45,7 @@ export default function ProfilePage() {
         .select("full_name, phone, role")
         .eq("id", session.user.id)
         .single();
+
       if (error) {
         setError("Failed to fetch profile.");
         setLoading(false);
@@ -57,8 +56,9 @@ export default function ProfilePage() {
       setPhone(data.phone || "");
       setLoading(false);
     };
+
     fetchProfile();
-  }, [session?.user]);
+  }, [session]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -157,4 +157,4 @@ export default function ProfilePage() {
       </main>
     </>
   );
-} 
+}
