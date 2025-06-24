@@ -2,6 +2,7 @@
 import Navbar from "@/components/Navbar";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import toast from 'react-hot-toast';
 
 interface Order {
   id: string;
@@ -163,6 +164,33 @@ export default function OrdersPage() {
     };
     fetchReturns();
   }, [session?.user, orderItems]);
+
+  useEffect(() => {
+    if (!session?.user) return;
+    // Subscribe to real-time order status updates
+    const channel = supabase
+      .channel(`order-status-${session.user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'orders',
+          filter: `customer_id=eq.${session.user.id}`,
+        },
+        (payload) => {
+          // Refetch orders
+          fetchOrders();
+          // Show a toast notification
+          const newStatus = payload.new.status;
+          toast.success(`Order ${payload.new.id} status updated: ${newStatus}`);
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [session?.user]);
 
   return (
     <>
