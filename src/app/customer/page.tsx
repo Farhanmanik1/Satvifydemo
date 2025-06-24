@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+import { supabase } from "@/lib/supabaseClient";
 import Navbar from "@/components/Navbar";
 import Image from "next/image";
 import Link from "next/link";
@@ -50,6 +52,30 @@ const REVIEWS = [
 ];
 
 export default function CustomerHome() {
+  useEffect(() => {
+    const ensureProfile = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      // Check if profile exists
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("id", user.id)
+        .single();
+      if (!profile) {
+        await supabase.from("profiles").insert([
+          {
+            id: user.id,
+            full_name: user.user_metadata?.full_name || user.email,
+            email: user.email,
+            role: "customer"
+          }
+        ]);
+      }
+    };
+    ensureProfile();
+  }, []);
+
   return (
     <>
       <Navbar />
