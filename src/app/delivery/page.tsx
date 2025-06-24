@@ -3,6 +3,7 @@ import Navbar from "@/components/Navbar";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import dynamic from "next/dynamic";
+import type { MapContainerProps, TileLayerProps, MarkerProps, PopupProps } from "react-leaflet";
 
 interface Order {
   id: string;
@@ -26,10 +27,25 @@ interface OrderItem {
   product_name?: string;
 }
 
-const MapContainer = dynamic(() => import("react-leaflet").then(mod => mod.MapContainer), { ssr: false });
-const TileLayer = dynamic(() => import("react-leaflet").then(mod => mod.TileLayer), { ssr: false });
-const Marker = dynamic(() => import("react-leaflet").then(mod => mod.Marker), { ssr: false });
-const Popup = dynamic(() => import("react-leaflet").then(mod => mod.Popup), { ssr: false });
+const MapContainer = dynamic(
+  () => import("react-leaflet").then(mod => mod.MapContainer),
+  { ssr: false }
+) as React.FC<MapContainerProps>;
+
+const TileLayer = dynamic(
+  () => import("react-leaflet").then(mod => mod.TileLayer),
+  { ssr: false }
+) as React.FC<TileLayerProps>;
+
+const Marker = dynamic(
+  () => import("react-leaflet").then(mod => mod.Marker),
+  { ssr: false }
+) as React.FC<MarkerProps>;
+
+const Popup = dynamic(
+  () => import("react-leaflet").then(mod => mod.Popup),
+  { ssr: false }
+) as React.FC<PopupProps>;
 
 export default function DeliveryDashboard() {
   const [session, setSession] = useState<any>(null);
