@@ -17,48 +17,80 @@ export default function ProfilePage() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
 
-  // Get session only once on mount
+  // Get session and profile robustly on mount
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (!session) {
-        router.push("/login");
-      }
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
-
-    return () => subscription.unsubscribe();
-  }, [router]);
-
-  // Fetch profile only AFTER session is fully loaded
-  useEffect(() => {
-    if (!session || !session.user) return;
-
-    const fetchProfile = async () => {
+    const fetchAndEnsureProfile = async () => {
       setLoading(true);
       setError("");
-      const { data, error } = await supabase
+
+      // Always get the latest user
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError || !userData.user) {
+        setError("Not logged in.");
+        setLoading(false);
+        router.push("/login");
+        return;
+      }
+      setSession({ user: userData.user });
+
+      // Try to fetch the profile
+      const { data: profile, error: selectError } = await supabase
         .from("profiles")
         .select("full_name, phone, role")
-        .eq("id", session.user.id)
+        .eq("id", userData.user.id)
         .single();
 
-      if (error) {
+      if (selectError && selectError.code !== "PGRST116") {
+        // Not a "no rows found" error
         setError("Failed to fetch profile.");
+        console.error("Profile fetch error:", selectError);
         setLoading(false);
         return;
       }
-      setProfile(data);
-      setName(data.full_name || "");
-      setPhone(data.phone || "");
+
+      if (!profile) {
+        // Try to insert the profile if missing
+        const { error: insertError } = await supabase.from("profiles").insert([
+          {
+            id: userData.user.id,
+            full_name: userData.user.user_metadata?.full_name || userData.user.email,
+            phone: "",
+            role: "customer"
+          }
+        ]);
+        if (insertError) {
+          setError("Failed to create profile.");
+          console.error("Profile insert error:", insertError);
+          setLoading(false);
+          return;
+        }
+        // Fetch again after insert
+        const { data: newProfile, error: newSelectError } = await supabase
+          .from("profiles")
+          .select("full_name, phone, role")
+          .eq("id", userData.user.id)
+          .single();
+        if (newSelectError) {
+          setError("Failed to fetch profile after insert.");
+          console.error("Profile fetch after insert error:", newSelectError);
+          setLoading(false);
+          return;
+        }
+        setProfile(newProfile);
+        setName(newProfile.full_name || "");
+        setPhone(newProfile.phone || "");
+        setLoading(false);
+        return;
+      }
+
+      setProfile(profile);
+      setName(profile.full_name || "");
+      setPhone(profile.phone || "");
       setLoading(false);
     };
 
-    fetchProfile();
-  }, [session]);
+    fetchAndEnsureProfile();
+  }, [router]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
