@@ -1,6 +1,6 @@
 "use client";
 import Navbar from "@/components/Navbar";
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useCart } from "@/store/cart";
 import { useSearchParams } from "next/navigation";
@@ -19,7 +19,7 @@ interface Product {
   category?: string;
 }
 
-export default function MenuPage() {
+function MenuPageContent() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -79,87 +79,95 @@ export default function MenuPage() {
   });
 
   return (
-    <>
-      <Navbar />
-      <main className="max-w-5xl mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold mb-6 text-blue-700">Menu</h1>
-        {/* Category Filter */}
-        <div className="flex flex-wrap gap-2 mb-6">
-          {CATEGORY_TAGS.map(tag => (
+    <main className="max-w-5xl mx-auto px-4 py-8">
+      <h1 className="text-2xl font-bold mb-6 text-blue-700">Menu</h1>
+      {/* Category Filter */}
+      <div className="flex flex-wrap gap-2 mb-6">
+        {CATEGORY_TAGS.map(tag => (
+          <button
+            key={tag}
+            className={`px-4 py-2 rounded-full border font-semibold transition-all text-sm ${selectedCategory && selectedCategory.toLowerCase() === tag.toLowerCase() ? "bg-blue-700 text-white border-blue-700" : "bg-white text-blue-700 border-blue-300 hover:bg-blue-100"}`}
+            onClick={() => setSelectedCategory(selectedCategory && selectedCategory.toLowerCase() === tag.toLowerCase() ? null : tag)}
+          >
+            {tag}
+          </button>
+        ))}
+        {selectedCategory && (
+          <button
+            className="ml-2 px-3 py-2 rounded-full bg-gray-200 text-gray-700 border border-gray-300 text-xs font-bold"
+            onClick={() => setSelectedCategory(null)}
+          >
+            Clear
+          </button>
+        )}
+      </div>
+      {/* Search and Diet Filter */}
+      <div className="flex flex-col md:flex-row md:items-center gap-4 mb-8">
+        <input
+          type="text"
+          placeholder="Search for dishes..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="flex-1 border border-blue-300 rounded-lg px-4 py-2 text-lg focus:ring-2 focus:ring-blue-200"
+        />
+        <div className="flex flex-wrap gap-2 mt-2 md:mt-0">
+          {DIET_TAGS.map(tag => (
             <button
               key={tag}
-              className={`px-4 py-2 rounded-full border font-semibold transition-all text-sm ${selectedCategory && selectedCategory.toLowerCase() === tag.toLowerCase() ? "bg-blue-700 text-white border-blue-700" : "bg-white text-blue-700 border-blue-300 hover:bg-blue-100"}`}
-              onClick={() => setSelectedCategory(selectedCategory && selectedCategory.toLowerCase() === tag.toLowerCase() ? null : tag)}
+              className={`px-4 py-2 rounded-full border font-semibold transition-all text-sm ${selectedDiet && selectedDiet.toLowerCase() === tag.toLowerCase() ? "bg-blue-600 text-white border-blue-600" : "bg-white text-blue-700 border-blue-300 hover:bg-blue-100"}`}
+              onClick={() => setSelectedDiet(selectedDiet && selectedDiet.toLowerCase() === tag.toLowerCase() ? null : tag)}
             >
               {tag}
             </button>
           ))}
-          {selectedCategory && (
+          {selectedDiet && (
             <button
               className="ml-2 px-3 py-2 rounded-full bg-gray-200 text-gray-700 border border-gray-300 text-xs font-bold"
-              onClick={() => setSelectedCategory(null)}
+              onClick={() => setSelectedDiet(null)}
             >
               Clear
             </button>
           )}
         </div>
-        {/* Search and Diet Filter */}
-        <div className="flex flex-col md:flex-row md:items-center gap-4 mb-8">
-          <input
-            type="text"
-            placeholder="Search for dishes..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="flex-1 border border-blue-300 rounded-lg px-4 py-2 text-lg focus:ring-2 focus:ring-blue-200"
-          />
-          <div className="flex flex-wrap gap-2 mt-2 md:mt-0">
-            {DIET_TAGS.map(tag => (
-              <button
-                key={tag}
-                className={`px-4 py-2 rounded-full border font-semibold transition-all text-sm ${selectedDiet && selectedDiet.toLowerCase() === tag.toLowerCase() ? "bg-blue-600 text-white border-blue-600" : "bg-white text-blue-700 border-blue-300 hover:bg-blue-100"}`}
-                onClick={() => setSelectedDiet(selectedDiet && selectedDiet.toLowerCase() === tag.toLowerCase() ? null : tag)}
-              >
-                {tag}
-              </button>
-            ))}
-            {selectedDiet && (
-              <button
-                className="ml-2 px-3 py-2 rounded-full bg-gray-200 text-gray-700 border border-gray-300 text-xs font-bold"
-                onClick={() => setSelectedDiet(null)}
-              >
-                Clear
-              </button>
-            )}
-          </div>
-        </div>
-        {loading && <p>Loading menu...</p>}
-        {error && <p className="text-red-500">{error}</p>}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-          {filteredProducts.length === 0 && !loading ? (
-            <div className="col-span-full text-center text-gray-500">No products found.</div>
-          ) : (
-            filteredProducts.map(product => (
-              <Link
-                key={product.id}
-                href={`/customer/menu/${product.id}`}
-                className="bg-white rounded-lg shadow p-4 flex flex-col hover:shadow-xl transition cursor-pointer"
-                style={{ textDecoration: 'none' }}
-              >
-                <h2 className="text-lg font-bold text-gray-900 mb-1">{product.name}</h2>
-                <p className="text-gray-700 mb-2">{product.description}</p>
-                <div className="mb-2">
-                  {product.tags && product.tags.map(tag => (
-                    <span key={tag} className="inline-block bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded mr-2 mb-1">{tag}</span>
-                  ))}
-                </div>
-                <div className="mt-auto flex items-center justify-between gap-2">
-                  <span className="text-lg font-semibold text-blue-700">₹{product.price}</span>
-                </div>
-              </Link>
-            ))
-          )}
-        </div>
-      </main>
+      </div>
+      {loading && <p>Loading menu...</p>}
+      {error && <p className="text-red-500">{error}</p>}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+        {filteredProducts.length === 0 && !loading ? (
+          <div className="col-span-full text-center text-gray-500">No products found.</div>
+        ) : (
+          filteredProducts.map(product => (
+            <Link
+              key={product.id}
+              href={`/customer/menu/${product.id}`}
+              className="bg-white rounded-lg shadow p-4 flex flex-col hover:shadow-xl transition cursor-pointer"
+              style={{ textDecoration: 'none' }}
+            >
+              <h2 className="text-lg font-bold text-gray-900 mb-1">{product.name}</h2>
+              <p className="text-gray-700 mb-2">{product.description}</p>
+              <div className="mb-2">
+                {product.tags && product.tags.map(tag => (
+                  <span key={tag} className="inline-block bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded mr-2 mb-1">{tag}</span>
+                ))}
+              </div>
+              <div className="mt-auto flex items-center justify-between gap-2">
+                <span className="text-lg font-semibold text-blue-700">₹{product.price}</span>
+              </div>
+            </Link>
+          ))
+        )}
+      </div>
+    </main>
+  );
+}
+
+export default function MenuPage() {
+  return (
+    <>
+      <Navbar />
+      <Suspense fallback={<div>Loading menu...</div>}>
+        <MenuPageContent />
+      </Suspense>
     </>
   );
 } 

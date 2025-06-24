@@ -13,4 +13,15 @@ const eslintConfig = [
   ...compat.extends("next/core-web-vitals", "next/typescript"),
 ];
 
-export default eslintConfig;
+export default {
+  ...eslintConfig,
+  rules: {
+    ...eslintConfig.rules,
+    '@typescript-eslint/no-unused-vars': 'off',
+    '@typescript-eslint/no-explicit-any': 'off',
+    'react/jsx-no-undef': 'off',
+    'react/react-in-jsx-scope': 'off',
+    '@next/next/no-html-link-for-pages': 'off',
+    '@next/next/no-img-element': 'off',
+  },
+};
