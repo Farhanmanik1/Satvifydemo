@@ -31,11 +31,20 @@ function MenuPageContent() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const searchParams = useSearchParams();
 
-  // Set diet filter from query param on first load or when param changes
+  // Set filters from query params on first load or when params change
   useEffect(() => {
     const dietParam = searchParams.get("diet");
+    const categoryParam = searchParams.get("category");
+    const searchParam = searchParams.get("search");
+
     if (dietParam && (!selectedDiet || selectedDiet.toLowerCase() !== dietParam.toLowerCase())) {
       setSelectedDiet(dietParam);
+    }
+    if (categoryParam && (!selectedCategory || selectedCategory.toLowerCase() !== categoryParam.toLowerCase())) {
+      setSelectedCategory(categoryParam);
+    }
+    if (searchParam && search !== searchParam) {
+      setSearch(searchParam);
     }
   }, [searchParams]);
 

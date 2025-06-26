@@ -25,6 +25,8 @@ export default function AdminDashboard() {
   const [profile, setProfile] = useState<any>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [session, setSession] = useState<any>(null);
+  const [searchOrderId, setSearchOrderId] = useState("");
+  const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
 
   useEffect(() => {
     // Check current session
@@ -70,8 +72,21 @@ export default function AdminDashboard() {
       return;
     }
     setOrders(data || []);
+    setFilteredOrders(data || []);
     setLoading(false);
   };
+
+  // Filter orders based on search
+  useEffect(() => {
+    if (searchOrderId.trim()) {
+      const filtered = orders.filter(order =>
+        order.id.toLowerCase().includes(searchOrderId.toLowerCase())
+      );
+      setFilteredOrders(filtered);
+    } else {
+      setFilteredOrders(orders);
+    }
+  }, [searchOrderId, orders]);
 
   // Analytics
   const totalOrders = orders.length;
@@ -80,6 +95,18 @@ export default function AdminDashboard() {
     acc[o.status] = (acc[o.status] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
+
+  // Additional analytics
+  const todayOrders = orders.filter(o => {
+    const orderDate = new Date(o.order_time);
+    const today = new Date();
+    return orderDate.toDateString() === today.toDateString();
+  }).length;
+
+  const completedOrders = orders.filter(o => o.status === "delivered").length;
+  const successRate = totalOrders > 0 ? ((completedOrders / totalOrders) * 100).toFixed(1) : "0";
+
+  const avgOrderValue = totalOrders > 0 ? (totalRevenue / totalOrders).toFixed(0) : "0";
 
   if (authChecked && (!profile || (profile.role !== "superadmin" && profile.role !== "admin"))) {
     return (
@@ -106,7 +133,7 @@ export default function AdminDashboard() {
         ) : (
           <>
             {/* Analytics Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
               <div className="bg-white rounded-lg shadow p-6 text-center">
                 <div className="text-3xl font-bold text-blue-700 mb-2">{totalOrders}</div>
                 <div className="text-black font-semibold">Total Orders</div>
@@ -116,20 +143,71 @@ export default function AdminDashboard() {
                 <div className="text-black font-semibold">Total Revenue</div>
               </div>
               <div className="bg-white rounded-lg shadow p-6 text-center">
-                <div className="text-lg font-bold text-black mb-2">Order Status</div>
-                <ul className="text-left text-black">
-                  {Object.entries(statusCounts).map(([status, count]) => (
-                    <li key={status} className="flex justify-between">
-                      <span className="capitalize">{status.replace(/-/g, ' ')}</span>
-                      <span className="font-bold">{count}</span>
-                    </li>
-                  ))}
-                </ul>
+                <div className="text-3xl font-bold text-orange-700 mb-2">{todayOrders}</div>
+                <div className="text-black font-semibold">Today's Orders</div>
+              </div>
+              <div className="bg-white rounded-lg shadow p-6 text-center">
+                <div className="text-3xl font-bold text-purple-700 mb-2">₹{avgOrderValue}</div>
+                <div className="text-black font-semibold">Avg Order Value</div>
               </div>
             </div>
-            {/* Recent Orders Table */}
+
+            {/* Additional Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+              <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-lg font-bold text-black mb-4">Order Status Breakdown</h3>
+                <div className="space-y-2">
+                  {Object.entries(statusCounts).map(([status, count]) => (
+                    <div key={status} className="flex justify-between items-center">
+                      <span className="capitalize text-gray-700">{status.replace(/-/g, ' ')}</span>
+                      <div className="flex items-center gap-2">
+                        <div className="w-20 bg-gray-200 rounded-full h-2">
+                          <div
+                            className="bg-blue-600 h-2 rounded-full"
+                            style={{ width: `${(count / totalOrders) * 100}%` }}
+                          ></div>
+                        </div>
+                        <span className="font-bold text-black w-8">{count}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="text-lg font-bold text-black mb-4">Business Metrics</h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between">
+                    <span className="text-gray-700">Success Rate</span>
+                    <span className="font-bold text-green-600">{successRate}%</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-700">Completed Orders</span>
+                    <span className="font-bold text-black">{completedOrders}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-700">Pending Orders</span>
+                    <span className="font-bold text-orange-600">{statusCounts.pending || 0}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            {/* Orders Table */}
             <div className="bg-white rounded-lg shadow p-6">
-              <h2 className="text-lg font-bold mb-4 text-blue-700">Recent Orders</h2>
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4">
+                <h2 className="text-lg font-bold text-blue-700 mb-2 md:mb-0">Orders Management</h2>
+                <div className="flex items-center gap-4">
+                  <input
+                    type="text"
+                    placeholder="Search by Order ID..."
+                    value={searchOrderId}
+                    onChange={(e) => setSearchOrderId(e.target.value)}
+                    className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                  />
+                  <span className="text-sm text-gray-600">
+                    {filteredOrders.length} of {totalOrders} orders
+                  </span>
+                </div>
+              </div>
               <div className="overflow-x-auto">
                 <table className="min-w-full text-sm text-black">
                   <thead>
@@ -141,7 +219,7 @@ export default function AdminDashboard() {
                     </tr>
                   </thead>
                   <tbody>
-                    {orders.slice(0, 10).map(order => (
+                    {filteredOrders.slice(0, 20).map(order => (
                       <tr key={order.id} className="border-b">
                         <td className="px-4 py-2 font-mono">{order.id}</td>
                         <td className="px-4 py-2 capitalize">{order.status.replace(/-/g, ' ')}</td>

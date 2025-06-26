@@ -4,6 +4,10 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { useCart } from "@/store/cart";
+import { useSession } from "@supabase/auth-helpers-react";
+import { StarIcon } from "@heroicons/react/24/solid";
+import { StarIcon as StarOutlineIcon } from "@heroicons/react/24/outline";
+import toast from "react-hot-toast";
 
 interface Product {
   id: string;
@@ -24,17 +28,24 @@ interface Review {
   rating: number;
   comment: string;
   created_at: string;
+  profiles?: {
+    full_name: string;
+  };
 }
 
 export default function ProductDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const session = useSession();
   const { addToCart } = useCart();
   const [product, setProduct] = useState<Product | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [quantity, setQuantity] = useState(1);
+  const [newReview, setNewReview] = useState({ rating: 5, comment: "" });
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [reviewError, setReviewError] = useState("");
 
   useEffect(() => {
     console.log('Product ID param:', params.productId);
@@ -64,15 +75,76 @@ export default function ProductDetailPage() {
 
   useEffect(() => {
     if (!product) return;
-    const fetchReviews = async () => {
-      const { data, error } = await supabase
-        .from("product_reviews")
-        .select("id, product_id, user_id, rating, comment, created_at")
-        .eq("product_id", product.id);
-      if (!error && data) setReviews(data);
-    };
     fetchReviews();
   }, [product]);
+
+  const fetchReviews = async () => {
+    if (!product) return;
+    const { data, error } = await supabase
+      .from("product_reviews")
+      .select(`
+        id, product_id, user_id, rating, comment, created_at,
+        profiles(full_name)
+      `)
+      .eq("product_id", product.id)
+      .order("created_at", { ascending: false });
+    if (!error && data) setReviews(data);
+  };
+
+  const handleSubmitReview = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!session?.user) {
+      setReviewError("Please log in to submit a review");
+      return;
+    }
+
+    setSubmittingReview(true);
+    setReviewError("");
+
+    try {
+      const { error } = await supabase
+        .from("product_reviews")
+        .insert([
+          {
+            product_id: product?.id,
+            user_id: session.user.id,
+            rating: newReview.rating,
+            comment: newReview.comment.trim(),
+          },
+        ]);
+
+      if (error) {
+        setReviewError("Failed to submit review. Please try again.");
+      } else {
+        setNewReview({ rating: 5, comment: "" });
+        fetchReviews(); // Refresh reviews
+      }
+    } catch (err) {
+      setReviewError("An error occurred while submitting your review.");
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
+  const averageRating = reviews.length > 0
+    ? (reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length).toFixed(1)
+    : "0";
+
+  const renderStars = (rating: number, interactive = false, onStarClick?: (rating: number) => void) => {
+    return Array.from({ length: 5 }, (_, i) => {
+      const filled = i < rating;
+      const StarComponent = filled ? StarIcon : StarOutlineIcon;
+      return (
+        <StarComponent
+          key={i}
+          className={`h-5 w-5 ${filled ? 'text-yellow-400' : 'text-gray-300'} ${
+            interactive ? 'cursor-pointer hover:text-yellow-400' : ''
+          }`}
+          onClick={interactive && onStarClick ? () => onStarClick(i + 1) : undefined}
+        />
+      );
+    });
+  };
 
   if (loading) {
     return (
@@ -114,6 +186,12 @@ export default function ProductDetailPage() {
           {/* Product Info */}
           <div className="flex-1 flex flex-col">
             <h1 className="text-3xl font-extrabold text-blue-700 mb-2">{product.name}</h1>
+            <div className="flex items-center gap-2 mb-2">
+              <div className="flex">{renderStars(Number(averageRating))}</div>
+              <span className="text-sm text-gray-600">
+                {averageRating} ({reviews.length} review{reviews.length !== 1 ? 's' : ''})
+              </span>
+            </div>
             <div className="mb-2 text-gray-700">{product.description}</div>
             <div className="mb-2">
               {product.tags && product.tags.map(tag => (
@@ -155,16 +233,69 @@ export default function ProductDetailPage() {
         </div>
         {/* Reviews Section */}
         <section className="mt-10">
-          <h2 className="text-xl font-bold text-blue-700 mb-4">Customer Reviews</h2>
+          <h2 className="text-xl font-bold text-blue-700 mb-6">Customer Reviews</h2>
+
+          {/* Add Review Form */}
+          {session?.user && (
+            <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Write a Review</h3>
+              <form onSubmit={handleSubmitReview}>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Rating</label>
+                  <div className="flex gap-1">
+                    {renderStars(newReview.rating, true, (rating) => setNewReview({ ...newReview, rating }))}
+                  </div>
+                </div>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Comment</label>
+                  <textarea
+                    value={newReview.comment}
+                    onChange={(e) => setNewReview({ ...newReview, comment: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                    rows={3}
+                    placeholder="Share your experience with this dish..."
+                    required
+                  />
+                </div>
+                {reviewError && (
+                  <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+                    {reviewError}
+                  </div>
+                )}
+                <button
+                  type="submit"
+                  disabled={submittingReview}
+                  className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                >
+                  {submittingReview ? "Submitting..." : "Submit Review"}
+                </button>
+              </form>
+            </div>
+          )}
+
+          {/* Reviews List */}
           {reviews.length === 0 ? (
-            <div className="text-gray-500">No reviews yet.</div>
+            <div className="text-center py-8 text-gray-500">
+              No reviews yet. Be the first to review this dish!
+            </div>
           ) : (
             <div className="space-y-4">
-              {reviews.map(r => (
-                <div key={r.id} className="bg-gray-50 rounded-xl p-4">
-                  <div className="font-bold text-blue-700 mb-1">{r.rating}★</div>
-                  <div className="text-gray-800 mb-1">{r.comment}</div>
-                  <div className="text-xs text-gray-500">{new Date(r.created_at).toLocaleDateString()}</div>
+              {reviews.map(review => (
+                <div key={review.id} className="bg-white rounded-lg shadow-md p-6">
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-semibold text-gray-900">
+                          {review.profiles?.full_name || "Anonymous"}
+                        </span>
+                        <div className="flex">{renderStars(review.rating)}</div>
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        {new Date(review.created_at).toLocaleDateString()}
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-gray-700">{review.comment}</p>
                 </div>
               ))}
             </div>
