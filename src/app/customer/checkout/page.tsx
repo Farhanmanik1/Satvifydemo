@@ -4,6 +4,13 @@ import Navbar from "@/components/Navbar";
 import { useCart } from "@/store/cart";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import Script from "next/script";
+
+declare global {
+  interface Window {
+    Razorpay: any;
+  }
+}
 
 export default function CheckoutPage() {
   const items = useCart((state) => state.items);
@@ -96,6 +103,74 @@ export default function CheckoutPage() {
     );
   };
 
+  const createOrder = async () => {
+    const user = session?.user;
+    if (!user) {
+      throw new Error("You must be logged in to place an order.");
+    }
+
+    // Insert order with pending payment status
+    const { data: order, error: orderError } = await supabase
+      .from("orders")
+      .insert([
+        {
+          customer_id: user.id,
+          status: "pending",
+          total_amount: total,
+          payment_status: "pending",
+          phone: phone,
+          address: address,
+          landmark: landmark,
+          customer_latitude: latitude,
+          customer_longitude: longitude,
+        },
+      ])
+      .select()
+      .single();
+
+    if (orderError || !order) {
+      throw new Error("Failed to create order.");
+    }
+
+    // Insert order items
+    const orderItems = items.map((item) => ({
+      order_id: order.id,
+      product_id: item.id,
+      quantity: item.quantity,
+      price: item.price,
+    }));
+
+    const { error: itemsError } = await supabase.from("order_items").insert(orderItems);
+    if (itemsError) {
+      throw new Error("Failed to save order items.");
+    }
+
+    return order;
+  };
+
+  const handlePaymentSuccess = async (orderId: string, paymentId: string) => {
+    try {
+      // Update order payment status
+      const { error } = await supabase
+        .from("orders")
+        .update({
+          payment_status: "completed",
+          payment_id: paymentId,
+          status: "confirmed"
+        })
+        .eq("id", orderId);
+
+      if (error) {
+        console.error("Error updating payment status:", error);
+      }
+
+      setOrderPlaced(true);
+      clearCart();
+    } catch (err) {
+      console.error("Error handling payment success:", err);
+    }
+  };
+
   const handlePlaceOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -111,56 +186,48 @@ export default function CheckoutPage() {
       setError("Please enter your name.");
       return;
     }
+
     setLoading(true);
     try {
-      // Get logged-in user from session
-      const user = session?.user;
-      if (!user) {
-        setError("You must be logged in to place an order. Please log out and log in again if you see this message in error.");
+      // Create order first
+      const order = await createOrder();
+
+      // Initialize Razorpay payment
+      if (!window.Razorpay) {
+        setError("Payment gateway not loaded. Please refresh and try again.");
         setLoading(false);
         return;
       }
-      // Insert order
-      const { data: order, error: orderError } = await supabase
-        .from("orders")
-        .insert([
-          {
-            customer_id: user.id,
-            status: "pending",
-            total_amount: total,
-            payment_status: "pending",
-            phone: phone,
-            address: address,
-            landmark: landmark,
-            customer_latitude: latitude,
-            customer_longitude: longitude,
-            // Optionally store address/phone/name in a JSON field or add columns
-          },
-        ])
-        .select()
-        .single();
-      if (orderError || !order) {
-        setError("Failed to place order. Please try again.");
-        setLoading(false);
-        return;
-      }
-      // Insert order items
-      const orderItems = items.map((item) => ({
+
+      const options = {
+        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "rzp_test_your_key_id", // Replace with your Razorpay key
+        amount: total * 100, // Amount in paise
+        currency: "INR",
+        name: "Satvify",
+        description: `Order #${order.id}`,
         order_id: order.id,
-        product_id: item.id,
-        quantity: item.quantity,
-        price: item.price,
-      }));
-      const { error: itemsError } = await supabase.from("order_items").insert(orderItems);
-      if (itemsError) {
-        setError("Order placed but failed to save items. Please contact support.");
-        setLoading(false);
-        return;
-      }
-      setOrderPlaced(true);
-      clearCart();
-    } catch (err) {
-      setError("An unexpected error occurred. Please try again.");
+        handler: function (response: any) {
+          handlePaymentSuccess(order.id, response.razorpay_payment_id);
+        },
+        prefill: {
+          name: name,
+          email: session?.user?.email || "",
+          contact: phone,
+        },
+        theme: {
+          color: "#2563eb",
+        },
+        modal: {
+          ondismiss: function () {
+            setLoading(false);
+          },
+        },
+      };
+
+      const razorpay = new window.Razorpay(options);
+      razorpay.open();
+    } catch (err: any) {
+      setError(err.message || "An unexpected error occurred. Please try again.");
       console.error("Order placement error:", err);
     } finally {
       setLoading(false);
@@ -169,13 +236,22 @@ export default function CheckoutPage() {
 
   return (
     <>
+      <Script src="https://checkout.razorpay.com/v1/checkout.js" />
       <Navbar />
       <main className="max-w-2xl mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold mb-6 text-blue-700">Checkout</h1>
         {orderPlaced ? (
           <div className="bg-green-100 text-green-800 p-6 rounded shadow text-center font-semibold">
-            Your order has been placed! Thank you for choosing Satvify1.<br />
-            (Cash on Delivery)
+            🎉 Payment Successful! Your order has been placed!<br />
+            Thank you for choosing Satvify. Your delicious meal is being prepared!<br />
+            <div className="mt-4">
+              <button
+                onClick={() => router.push("/customer/orders")}
+                className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 transition-colors"
+              >
+                View Your Orders
+              </button>
+            </div>
           </div>
         ) : (
           <>

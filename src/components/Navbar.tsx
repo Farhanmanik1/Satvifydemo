@@ -48,7 +48,7 @@ export default function Navbar() {
     { href: "/customer/cart", label: "Cart", icon: <ShoppingCartIcon className="w-5 h-5 mr-2" />, badge: cartCount },
     { href: "/customer/orders", label: "Orders", icon: <ClipboardIcon className="w-5 h-5 mr-2" /> },
     { href: "/customer/support", label: "Support", icon: <ChatBubbleLeftRightIcon className="w-5 h-5 mr-2" /> },
-    { href: "/customer/profile", label: "Profile", icon: <UserCircleIcon className="w-5 h-5 mr-2" /> },
+    { href: "/customer/settings", label: "Settings", icon: <UserCircleIcon className="w-5 h-5 mr-2" /> },
   ];
 
   // Helper to determine if a link is active (client-side only, fallback to false on SSR)
